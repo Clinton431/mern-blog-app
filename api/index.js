@@ -16,12 +16,26 @@ const fs = require("fs");
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
 
-// CORS (IMPORTANT for Vercel + Render)
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// --------------------------------------
+// CORS CONFIG (UPDATED)
+// --------------------------------------
+const allowedOrigins = [
+  "https://mern-blog-app-teal.vercel.app",
+  "https://mern-blog-afx6286wi-clinton-nyakoes-projects.vercel.app",
+  "http://localhost:5173",
+];
+
 app.use(
   cors({
     credentials: true,
-    origin: FRONTEND_URL,
+    origin: function (origin, callback) {
+      // allow requests with no origin (e.g., mobile apps, curl)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS: Origin not allowed"));
+      }
+    },
   })
 );
 
@@ -64,7 +78,6 @@ app.post("/login", async (req, res) => {
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
       if (err) throw err;
 
-      // Important: secure cookies for production
       res
         .cookie("token", token, {
           httpOnly: true,
