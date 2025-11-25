@@ -3,6 +3,8 @@ import { Navigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
 export default function CreatePost() {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -25,7 +27,7 @@ export default function CreatePost() {
     if (files?.[0]) data.set("file", files[0]);
 
     try {
-      const response = await fetch("http://localhost:4000/post", {
+      const response = await fetch(`${API_URL}/post`, {
         method: "POST",
         body: data,
         credentials: "include",

@@ -3,13 +3,15 @@ import { useContext, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { UserContext } from "../UserContext";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
 export default function PostPage() {
   const { id } = useParams();
   const [postInfo, setPostInfo] = useState(null);
   const { userInfo } = useContext(UserContext);
 
   useEffect(() => {
-    fetch(`http://localhost:4000/post/${id}`)
+    fetch(`${API_URL}/post/${id}`)
       .then((response) => response.json())
       .then((data) => setPostInfo(data))
       .catch((err) => console.error("Failed to fetch post:", err));
@@ -50,10 +52,7 @@ export default function PostPage() {
       )}
 
       <div className="image">
-        <img
-          src={`http://localhost:4000/${postInfo.cover}`}
-          alt={postInfo.title}
-        />
+        <img src={`${API_URL}/${postInfo.cover}`} alt={postInfo.title} />
       </div>
 
       <div

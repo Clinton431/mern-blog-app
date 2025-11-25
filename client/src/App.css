@@ -208,3 +208,14 @@ div.post-page a.edit-btn {
 a svg {
   height: 20px;
 }
+
+.user-greeting {
+  background: #eef2ff;
+  color: #3730a3;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 500;
+  margin-right: 12px;
+  display: inline-block;
+  font-size: 14px;
+}

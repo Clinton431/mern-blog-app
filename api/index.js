@@ -12,12 +12,19 @@ const multer = require("multer");
 const uploadMiddleware = multer({ dest: "uploads/" });
 const fs = require("fs");
 
-// Load .env secrets
+// bcrypt/jwt settings
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
 
-// CORS for frontend
-app.use(cors({ credentials: true, origin: "http://localhost:5173" }));
+// CORS (IMPORTANT for Vercel + Render)
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+app.use(
+  cors({
+    credentials: true,
+    origin: FRONTEND_URL,
+  })
+);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
@@ -31,9 +38,8 @@ mongoose
   .catch((err) => console.error("MongoDB connection error:", err));
 
 // ---------------------------
-// Authentication Routes
+// Authentication
 // ---------------------------
-
 app.post("/register", async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -50,16 +56,25 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   const userDoc = await User.findOne({ username });
+
   if (!userDoc) return res.status(400).json("User not found");
 
   const passOk = bcrypt.compareSync(password, userDoc.password);
   if (passOk) {
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
       if (err) throw err;
-      res.cookie("token", token).json({
-        id: userDoc._id,
-        username,
-      });
+
+      // Important: secure cookies for production
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          sameSite: "none",
+          secure: true,
+        })
+        .json({
+          id: userDoc._id,
+          username,
+        });
     });
   } else {
     res.status(400).json("wrong credentials");
@@ -75,13 +90,14 @@ app.get("/profile", (req, res) => {
 });
 
 app.post("/logout", (req, res) => {
-  res.cookie("token", "", { sameSite: "none", secure: true }).json("ok");
+  res
+    .cookie("token", "", { httpOnly: true, sameSite: "none", secure: true })
+    .json("ok");
 });
 
 // ---------------------------
-// Post Creation
+// Create Post
 // ---------------------------
-
 app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
   const { originalname, path } = req.file;
   const ext = originalname.split(".").pop();
@@ -106,9 +122,8 @@ app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
 });
 
 // ---------------------------
-// Post Update
+// Update Post
 // ---------------------------
-
 app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
   let newPath = null;
 
@@ -127,9 +142,8 @@ app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
     const postDoc = await Post.findById(id);
 
     if (!postDoc) return res.status(404).json("Post not found");
-
-    const isAuthor = String(postDoc.author) === String(info.id);
-    if (!isAuthor) return res.status(403).json("You are not the author");
+    if (String(postDoc.author) !== String(info.id))
+      return res.status(403).json("You are not the author");
 
     postDoc.title = title;
     postDoc.summary = summary;
@@ -144,7 +158,6 @@ app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
 // ---------------------------
 // Get Posts
 // ---------------------------
-
 app.get("/post", async (req, res) => {
   res.json(
     await Post.find()
@@ -161,6 +174,7 @@ app.get("/post/:id", async (req, res) => {
 });
 
 // ---------------------------
-// Start Server
+// Start Server (Render)
 // ---------------------------
-app.listen(4000, () => console.log("API running on port 4000"));
+const port = process.env.PORT || 4000;
+app.listen(port, () => console.log(`API running on port ${port}`));
