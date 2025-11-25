@@ -17,25 +17,26 @@ const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
 
 // --------------------------------------
-// CORS CONFIG (UPDATED)
+// CORS CONFIG (Dynamic for Vercel)
 // --------------------------------------
-const allowedOrigins = [
-  "https://mern-blog-app-teal.vercel.app",
-  "https://mern-blog-afx6286wi-clinton-nyakoes-projects.vercel.app",
-  "http://localhost:5173",
-];
+const allowedOrigins = ["http://localhost:5173"];
 
 app.use(
   cors({
-    credentials: true,
     origin: function (origin, callback) {
-      // allow requests with no origin (e.g., mobile apps, curl)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS: Origin not allowed"));
+      // allow requests with no origin (mobile apps, curl)
+      if (!origin) return callback(null, true);
+
+      // allow any Vercel frontend deployment dynamically
+      if (origin.endsWith(".vercel.app") || allowedOrigins.includes(origin)) {
+        return callback(null, true);
       }
+
+      callback(new Error("CORS: Origin not allowed"));
     },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -187,7 +188,7 @@ app.get("/post/:id", async (req, res) => {
 });
 
 // ---------------------------
-// Start Server (Render)
+// Start Server
 // ---------------------------
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`API running on port ${port}`));
+app.listen(port, () => console.log(`🚀 API running on port ${port}`));
