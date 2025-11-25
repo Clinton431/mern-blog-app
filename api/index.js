@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
@@ -11,17 +12,27 @@ const multer = require("multer");
 const uploadMiddleware = multer({ dest: "uploads/" });
 const fs = require("fs");
 
+// Load .env secrets
 const salt = bcrypt.genSaltSync(10);
-const secret = "4Tiz866mjWQjIPVxP06yi4u2YRuzlKJa";
+const secret = process.env.JWT_SECRET;
 
+// CORS for frontend
 app.use(cors({ credentials: true, origin: "http://localhost:5173" }));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
 
-mongoose.connect(
-  "mongodb+srv://clintonnyakoe_db_user:G8Kd116ya5znqPBl@cluster0.ebu0neh.mongodb.net/?appName=Cluster0"
-);
+// ---------------------------
+// MongoDB Connection
+// ---------------------------
+mongoose
+  .connect(process.env.MONGO_URL)
+  .then(() => console.log("✔ Connected to MongoDB"))
+  .catch((err) => console.error("MongoDB connection error:", err));
+
+// ---------------------------
+// Authentication Routes
+// ---------------------------
 
 app.post("/register", async (req, res) => {
   const { username, password } = req.body;
@@ -39,9 +50,10 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   const userDoc = await User.findOne({ username });
+  if (!userDoc) return res.status(400).json("User not found");
+
   const passOk = bcrypt.compareSync(password, userDoc.password);
   if (passOk) {
-    //logged in
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
       if (err) throw err;
       res.cookie("token", token).json({
@@ -49,7 +61,6 @@ app.post("/login", async (req, res) => {
         username,
       });
     });
-    // res.json()
   } else {
     res.status(400).json("wrong credentials");
   }
@@ -58,25 +69,29 @@ app.post("/login", async (req, res) => {
 app.get("/profile", (req, res) => {
   const { token } = req.cookies;
   jwt.verify(token, secret, {}, (err, info) => {
-    if (err) throw err;
+    if (err) return res.status(401).json("Invalid token");
     res.json(info);
   });
 });
 
 app.post("/logout", (req, res) => {
-  res.cookie("token", "").json("ok");
+  res.cookie("token", "", { sameSite: "none", secure: true }).json("ok");
 });
+
+// ---------------------------
+// Post Creation
+// ---------------------------
 
 app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
   const { originalname, path } = req.file;
-  const parts = originalname.split(".");
-  const ext = parts[parts.length - 1];
+  const ext = originalname.split(".").pop();
   const newPath = path + "." + ext;
   fs.renameSync(path, newPath);
 
   const { token } = req.cookies;
   jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
+    if (err) return res.status(401).json("Unauthorized");
+
     const { title, summary, content } = req.body;
     const postDoc = await Post.create({
       title,
@@ -85,9 +100,14 @@ app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
       cover: newPath,
       author: info.id,
     });
+
     res.json(postDoc);
   });
 });
+
+// ---------------------------
+// Post Update
+// ---------------------------
 
 app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
   let newPath = null;
@@ -100,38 +120,30 @@ app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
   }
 
   const { token } = req.cookies;
-
   jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
+    if (err) return res.status(401).json("Unauthorized");
 
     const { id, title, summary, content } = req.body;
-
     const postDoc = await Post.findById(id);
 
-    if (!postDoc) {
-      return res.status(404).json("Post not found");
-    }
+    if (!postDoc) return res.status(404).json("Post not found");
 
-    // only the author can edit
-    const isAuthor = JSON.stringify(postDoc.author) === JSON.stringify(info.id);
-    if (!isAuthor) {
-      return res.status(400).json("You are not the author");
-    }
+    const isAuthor = String(postDoc.author) === String(info.id);
+    if (!isAuthor) return res.status(403).json("You are not the author");
 
-    // update fields
     postDoc.title = title;
     postDoc.summary = summary;
     postDoc.content = content;
-    if (newPath) {
-      postDoc.cover = newPath;
-    }
+    if (newPath) postDoc.cover = newPath;
 
-    // save update
     await postDoc.save();
-
     res.json(postDoc);
   });
 });
+
+// ---------------------------
+// Get Posts
+// ---------------------------
 
 app.get("/post", async (req, res) => {
   res.json(
@@ -147,4 +159,8 @@ app.get("/post/:id", async (req, res) => {
   const postDoc = await Post.findById(id).populate("author", ["username"]);
   res.json(postDoc);
 });
-app.listen(4000);
+
+// ---------------------------
+// Start Server
+// ---------------------------
+app.listen(4000, () => console.log("API running on port 4000"));
