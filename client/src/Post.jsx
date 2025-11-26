@@ -11,21 +11,29 @@ export default function Post({
   createdAt,
   author,
 }) {
+  // Normalize the image path (fixes broken URLs on production/localhost)
+  const imageUrl = cover ? `${API_URL}/${cover.replace(/^\/+/, "")}` : null;
+
   return (
     <div className="post">
-      <div className="image">
-        <Link to={`/post/${_id}`}>
-          <img src={`${API_URL}/` + cover} alt="" />
-        </Link>
-      </div>
+      {imageUrl && (
+        <div className="image">
+          <Link to={`/post/${_id}`}>
+            <img src={imageUrl} alt={title} loading="lazy" />
+          </Link>
+        </div>
+      )}
+
       <div className="texts">
         <Link to={`/post/${_id}`}>
           <h2>{title}</h2>
         </Link>
+
         <p className="info">
-          <a className="author">{author.username}</a>
-          <time dateTime="">{formatISO9075(new Date(createdAt))}</time>
+          <a className="author">{author?.username}</a>
+          <time>{formatISO9075(new Date(createdAt))}</time>
         </p>
+
         <p className="summary">{summary}</p>
       </div>
     </div>
