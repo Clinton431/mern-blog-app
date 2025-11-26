@@ -1,7 +1,3 @@
-Here is the cleaned-up README with all sensitive/private credentials removed.
-Everything now uses placeholders and safe examples only.
-
----
 
 # 🚀 MyBlog — A Full-Stack MERN Blogging Platform
 
