@@ -1,8 +1,6 @@
 import { formatISO9075 } from "date-fns";
 import { Link } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
-
 export default function Post({
   _id,
   title,
@@ -11,8 +9,7 @@ export default function Post({
   createdAt,
   author,
 }) {
-  // Normalize the image path (fixes broken URLs on production/localhost)
-  const imageUrl = cover ? `${API_URL}/${cover.replace(/^\/+/, "")}` : null;
+  const imageUrl = cover || null;
 
   return (
     <div className="post">
@@ -30,7 +27,7 @@ export default function Post({
         </Link>
 
         <p className="info">
-          <a className="author">{author?.username}</a>
+          <span className="author">{author?.username}</span>
           <time>{formatISO9075(new Date(createdAt))}</time>
         </p>
 

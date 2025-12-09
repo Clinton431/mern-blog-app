@@ -9,60 +9,56 @@ const app = express();
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const multer = require("multer");
-const uploadMiddleware = multer({ dest: "uploads/" });
 const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
+
+const uploadMiddleware = multer({ dest: "uploads/" });
 
 // bcrypt/jwt settings
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
 
-// --------------------------------------
-// CORS CONFIG (Dynamic for Vercel)
-// --------------------------------------
+// Cloudinary config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// CORS
 const allowedOrigins = ["http://localhost:5173"];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (mobile apps, curl)
       if (!origin) return callback(null, true);
-
-      // allow any Vercel frontend deployment dynamically
       if (origin.endsWith(".vercel.app") || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-
-      callback(new Error("CORS: Origin not allowed"));
+      callback(new Error("CORS blocked"));
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
 app.use(express.json());
 app.use(cookieParser());
-app.use("/uploads", express.static(__dirname + "/uploads"));
 
-// ---------------------------
-// MongoDB Connection
-// ---------------------------
+// MongoDB
 mongoose
   .connect(process.env.MONGO_URL)
-  .then(() => console.log("✔ Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => console.log("✔ MongoDB Connected"))
+  .catch((e) => console.log(e));
 
-// ---------------------------
-// Authentication
-// ---------------------------
+// AUTH
 app.post("/register", async (req, res) => {
   const { username, password } = req.body;
   try {
-    const UserDoc = await User.create({
+    const userDoc = await User.create({
       username,
       password: bcrypt.hashSync(password, salt),
     });
-    res.json(UserDoc);
+    res.json(userDoc);
   } catch (e) {
     res.status(400).json(e);
   }
@@ -71,14 +67,12 @@ app.post("/register", async (req, res) => {
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   const userDoc = await User.findOne({ username });
-
   if (!userDoc) return res.status(400).json("User not found");
 
   const passOk = bcrypt.compareSync(password, userDoc.password);
+
   if (passOk) {
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
-      if (err) throw err;
-
       res
         .cookie("token", token, {
           httpOnly: true,
@@ -91,43 +85,49 @@ app.post("/login", async (req, res) => {
         });
     });
   } else {
-    res.status(400).json("wrong credentials");
+    res.status(400).json("Wrong credentials");
   }
 });
 
 app.get("/profile", (req, res) => {
   const { token } = req.cookies;
   jwt.verify(token, secret, {}, (err, info) => {
-    if (err) return res.status(401).json("Invalid token");
+    if (err) return res.status(401).json("Invalid");
     res.json(info);
   });
 });
 
 app.post("/logout", (req, res) => {
-  res
-    .cookie("token", "", { httpOnly: true, sameSite: "none", secure: true })
-    .json("ok");
+  res.cookie("token", "", { httpOnly: true, secure: true }).json("ok");
 });
 
-// ---------------------------
-// Create Post
-// ---------------------------
+// ------------------------
+// CREATE POST (Cloudinary)
+// ------------------------
 app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
-  const { originalname, path } = req.file;
-  const ext = originalname.split(".").pop();
-  const newPath = path + "." + ext;
-  fs.renameSync(path, newPath);
-
   const { token } = req.cookies;
+
   jwt.verify(token, secret, {}, async (err, info) => {
     if (err) return res.status(401).json("Unauthorized");
 
+    let imageUrl = "";
+
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: "blog_uploads",
+      });
+
+      imageUrl = result.secure_url;
+      fs.unlinkSync(req.file.path);
+    }
+
     const { title, summary, content } = req.body;
+
     const postDoc = await Post.create({
       title,
       summary,
       content,
-      cover: newPath,
+      cover: imageUrl,
       author: info.id,
     });
 
@@ -135,60 +135,59 @@ app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
   });
 });
 
-// ---------------------------
-// Update Post
-// ---------------------------
+// ------------------------
+// UPDATE POST (Cloudinary)
+// ------------------------
 app.put("/post", uploadMiddleware.single("file"), async (req, res) => {
-  let newPath = null;
-
-  if (req.file) {
-    const { originalname, path } = req.file;
-    const ext = originalname.split(".").pop();
-    newPath = path + "." + ext;
-    fs.renameSync(path, newPath);
-  }
-
   const { token } = req.cookies;
+
   jwt.verify(token, secret, {}, async (err, info) => {
     if (err) return res.status(401).json("Unauthorized");
 
     const { id, title, summary, content } = req.body;
     const postDoc = await Post.findById(id);
 
-    if (!postDoc) return res.status(404).json("Post not found");
+    if (!postDoc) return res.status(404).json("Not found");
     if (String(postDoc.author) !== String(info.id))
-      return res.status(403).json("You are not the author");
+      return res.status(403).json("Forbidden");
+
+    let imageUrl = postDoc.cover;
+
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: "blog_uploads",
+      });
+
+      imageUrl = result.secure_url;
+      fs.unlinkSync(req.file.path);
+    }
 
     postDoc.title = title;
     postDoc.summary = summary;
     postDoc.content = content;
-    if (newPath) postDoc.cover = newPath;
+    postDoc.cover = imageUrl;
 
     await postDoc.save();
     res.json(postDoc);
   });
 });
 
-// ---------------------------
-// Get Posts
-// ---------------------------
+// POSTS
 app.get("/post", async (req, res) => {
-  res.json(
-    await Post.find()
-      .populate("author", ["username"])
-      .sort({ createdAt: -1 })
-      .limit(20)
-  );
+  const posts = await Post.find()
+    .populate("author", ["username"])
+    .sort({ createdAt: -1 });
+
+  res.json(posts);
 });
 
 app.get("/post/:id", async (req, res) => {
-  const { id } = req.params;
-  const postDoc = await Post.findById(id).populate("author", ["username"]);
-  res.json(postDoc);
+  const post = await Post.findById(req.params.id).populate("author", [
+    "username",
+  ]);
+  res.json(post);
 });
 
-// ---------------------------
-// Start Server
-// ---------------------------
+// SERVER
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`🚀 API running on port ${port}`));
+app.listen(port, () => console.log(`🚀 API running on ${port}`));

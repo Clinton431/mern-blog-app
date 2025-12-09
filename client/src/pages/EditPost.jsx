@@ -7,21 +7,68 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function EditPost() {
   const { id } = useParams();
+
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [content, setContent] = useState("");
   const [files, setFiles] = useState(null);
+
+  const [currentImage, setCurrentImage] = useState("");
+  const [previewImage, setPreviewImage] = useState("");
+
   const [redirect, setRedirect] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // normalize image URL
+  function normalizeImage(url) {
+    if (!url) return "";
+    if (url.startsWith("http")) return url; // Cloudinary or full URL
+    return `${API_URL}/${url.replace(/^\/+/, "")}`; // old local uploads
+  }
 
   useEffect(() => {
-    fetch(`${API_URL}/post/` + id).then((response) => {
-      response.json().then((postInfo) => {
-        setTitle(postInfo.title);
-        setContent(postInfo.content);
-        setSummary(postInfo.summary);
-      });
-    });
+    if (!id) {
+      toast.error("Invalid post ID");
+      return;
+    }
+
+    async function loadPost() {
+      try {
+        const res = await fetch(`${API_URL}/post/${id}`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) throw new Error("Post not found");
+
+        const postInfo = await res.json();
+
+        setTitle(postInfo.title || "");
+        setSummary(postInfo.summary || "");
+        setContent(postInfo.content || "");
+
+        // ✅ Fix broken images here
+        setCurrentImage(normalizeImage(postInfo.cover));
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load post");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadPost();
   }, [id]);
+
+  // When a new image is selected
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    setFiles(e.target.files);
+
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setPreviewImage(previewUrl);
+    }
+  }
 
   async function updatePost(e) {
     e.preventDefault();
@@ -32,108 +79,42 @@ export default function EditPost() {
     data.set("content", content);
     data.set("id", id);
 
-    if (files?.[0]) data.set("file", files[0]);
+    if (files?.[0]) {
+      data.set("file", files[0]);
+    }
 
     try {
-      const response = await fetch(`${API_URL}/post/`, {
+      const response = await fetch(`${API_URL}/post`, {
         method: "PUT",
         body: data,
         credentials: "include",
       });
 
-      if (response.ok) {
-        toast.success("Post updated successfully!");
-        setTimeout(() => setRedirect(true), 1500); // redirect after toast
-      } else {
-        toast.error("Failed to update post.");
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("An error occurred. Please try again.");
+      if (!response.ok) throw new Error();
+
+      toast.success("Post updated!");
+      setTimeout(() => setRedirect(true), 1500);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update post");
     }
   }
 
   if (redirect) {
-    return <Navigate to={"/post/" + id} />;
+    return <Navigate to={`/post/${id}`} />;
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: "20px", textAlign: "center" }}>
+        Loading post...
+      </div>
+    );
   }
 
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} />
-      <style>{`
-        .container {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 24px;
-        }
-
-        h1 {
-          font-size: 28px;
-          font-weight: bold;
-          margin-bottom: 24px;
-        }
-
-        .form-container {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-        }
-
-        label {
-          display: block;
-          margin-bottom: 8px;
-          font-size: 14px;
-          font-weight: 500;
-          color: #374151;
-        }
-
-        input[type="text"],
-        input[type="file"],
-        textarea {
-          width: 100%;
-          padding: 10px 16px;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          font-size: 14px;
-          box-sizing: border-box;
-        }
-
-        input[type="text"]:focus,
-        input[type="file"]:focus,
-        textarea:focus {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        textarea {
-          font-family: 'Courier New', monospace;
-          resize: vertical;
-        }
-
-        button {
-          width: 100%;
-          background-color: #2563eb;
-          color: white;
-          padding: 10px 16px;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          margin-top: 5px;
-        }
-
-        button:hover {
-          background-color: #1d4ed8;
-        }
-      `}</style>
 
       <div className="container">
         <h1>Update the Post</h1>
@@ -145,6 +126,7 @@ export default function EditPost() {
               placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              required
             />
           </div>
 
@@ -154,16 +136,43 @@ export default function EditPost() {
               placeholder="Summary"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
+              required
             />
           </div>
 
+          {/* IMAGE PREVIEW */}
           <div className="form-group">
-            <label>Featured Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFiles(e.target.files)}
-            />
+            <label>Current Image</label>
+
+            {previewImage ? (
+              <img
+                src={previewImage}
+                alt="New Preview"
+                style={{
+                  width: "100%",
+                  maxHeight: "250px",
+                  objectFit: "cover",
+                  borderRadius: "12px",
+                  marginBottom: "10px",
+                }}
+              />
+            ) : currentImage ? (
+              <img
+                src={currentImage}
+                alt="Current"
+                style={{
+                  width: "100%",
+                  maxHeight: "250px",
+                  objectFit: "cover",
+                  borderRadius: "12px",
+                  marginBottom: "10px",
+                }}
+              />
+            ) : (
+              <p style={{ color: "#666" }}>No image yet</p>
+            )}
+
+            <input type="file" accept="image/*" onChange={handleFileChange} />
           </div>
 
           <div className="form-group">
@@ -171,7 +180,6 @@ export default function EditPost() {
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your post content here..."
               rows={12}
             />
           </div>
