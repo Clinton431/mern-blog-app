@@ -10,10 +10,21 @@ export default function PostPage() {
   const [postInfo, setPostInfo] = useState(null);
   const { userInfo } = useContext(UserContext);
 
+  // Normalize image URL
+  function normalizeImage(url) {
+    if (!url) return "";
+    if (url.startsWith("http")) return url; // Cloudinary / full URL
+    return `${API_URL}/${url.replace(/^\/+/, "")}`; // legacy local uploads
+  }
+
   useEffect(() => {
     fetch(`${API_URL}/post/${id}`)
       .then((response) => response.json())
-      .then((data) => setPostInfo(data))
+      .then((data) => {
+        // fix cover before storing
+        data.cover = normalizeImage(data.cover);
+        setPostInfo(data);
+      })
       .catch((err) => console.error("Failed to fetch post:", err));
   }, [id]);
 
@@ -51,9 +62,11 @@ export default function PostPage() {
         </div>
       )}
 
-      <div className="image">
-        <img src={`${API_URL}/${postInfo.cover}`} alt={postInfo.title} />
-      </div>
+      {postInfo.cover && (
+        <div className="image">
+          <img src={postInfo.cover} alt={postInfo.title} />
+        </div>
+      )}
 
       <div
         className="content"
