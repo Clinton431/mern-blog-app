@@ -2,6 +2,7 @@ import { formatISO9075 } from "date-fns";
 import { useContext, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { UserContext } from "../UserContext";
+import PostPageSkeleton from "./PostPageSkeleton";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -10,25 +11,24 @@ export default function PostPage() {
   const [postInfo, setPostInfo] = useState(null);
   const { userInfo } = useContext(UserContext);
 
-  // Normalize image URL
   function normalizeImage(url) {
     if (!url) return "";
-    if (url.startsWith("http")) return url; // Cloudinary / full URL
-    return `${API_URL}/${url.replace(/^\/+/, "")}`; // legacy local uploads
+    if (url.startsWith("http")) return url;
+    return `${API_URL}/${url.replace(/^\/+/, "")}`;
   }
 
   useEffect(() => {
     fetch(`${API_URL}/post/${id}`)
       .then((response) => response.json())
       .then((data) => {
-        // fix cover before storing
         data.cover = normalizeImage(data.cover);
         setPostInfo(data);
       })
       .catch((err) => console.error("Failed to fetch post:", err));
   }, [id]);
 
-  if (!postInfo) return <p>Loading post...</p>;
+  // 👉 SHOW SKELETON WHILE LOADING
+  if (!postInfo) return <PostPageSkeleton />;
 
   const isAuthor =
     userInfo?.id && String(userInfo.id) === String(postInfo.author?._id);

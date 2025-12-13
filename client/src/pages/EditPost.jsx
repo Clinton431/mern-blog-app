@@ -19,11 +19,10 @@ export default function EditPost() {
   const [redirect, setRedirect] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // normalize image URL
   function normalizeImage(url) {
     if (!url) return "";
-    if (url.startsWith("http")) return url; // Cloudinary or full URL
-    return `${API_URL}/${url.replace(/^\/+/, "")}`; // old local uploads
+    if (url.startsWith("http")) return url;
+    return `${API_URL}/${url.replace(/^\/+/, "")}`;
   }
 
   useEffect(() => {
@@ -45,8 +44,6 @@ export default function EditPost() {
         setTitle(postInfo.title || "");
         setSummary(postInfo.summary || "");
         setContent(postInfo.content || "");
-
-        // ✅ Fix broken images here
         setCurrentImage(normalizeImage(postInfo.cover));
       } catch (err) {
         console.error(err);
@@ -59,7 +56,6 @@ export default function EditPost() {
     loadPost();
   }, [id]);
 
-  // When a new image is selected
   function handleFileChange(e) {
     const file = e.target.files?.[0];
     setFiles(e.target.files);
@@ -104,10 +100,15 @@ export default function EditPost() {
     return <Navigate to={`/post/${id}`} />;
   }
 
+  // ✅ UPDATED SKELETON — ONLY CHANGE HERE
   if (loading) {
     return (
-      <div style={{ padding: "20px", textAlign: "center" }}>
-        Loading post...
+      <div className="post-skeleton">
+        <div className="skeleton skeleton-title"></div>
+        <div className="skeleton skeleton-input"></div>
+        <div className="skeleton skeleton-input"></div>
+        <div className="skeleton skeleton-image"></div>
+        <div className="skeleton skeleton-text"></div>
       </div>
     );
   }
@@ -140,7 +141,6 @@ export default function EditPost() {
             />
           </div>
 
-          {/* IMAGE PREVIEW */}
           <div className="form-group">
             <label>Current Image</label>
 
