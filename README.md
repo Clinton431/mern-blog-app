@@ -28,6 +28,7 @@ This project demonstrates real-world full-stack development: authentication, pro
 
 - Multer-powered image uploads
 - Server-side storage and accessible image URLs
+- Images are uploaded to cloudinary.
 
 ### 🌐 Deployment
 
